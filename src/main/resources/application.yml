@@ -1,0 +1,15 @@
+jwt:
+  secret: 'thisisverysecurewordthisisverysecurewordthisisverysecureword'
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    password: postgres
+    username: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
