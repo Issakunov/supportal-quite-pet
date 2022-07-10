@@ -1,11 +1,14 @@
-package com.example.service;
+package com.example.service.impl;
 
 import com.example.domain.UserPrinciple;
 import com.example.domain.Users;
 import com.example.exception.EmailExistsException;
 import com.example.exception.EmailNotFoundException;
 import com.example.exception.UsernameExistsException;
+import com.example.exception.UsernameNotFoundException;
 import com.example.repository.UserRepository;
+import com.example.service.LoginAttemptService;
+import com.example.service.UserService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -13,7 +16,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -34,18 +36,40 @@ public class UserServiceImpl implements UserService, UserDetailsService {
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final LoginAttemptService loginAttemptService;
 
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        log.error("User not found by username: " + username);
+    public UserDetails loadUserByUsername(String username) {
         Users user = userRepository.findUsersByUsername(username);
-        user.setLastLoginDateDisplay(user.getLastLoginDate());
-        user.setLastLoginDate(new Date());
-        userRepository.save(user);
-        UserPrinciple userPrinciple = new UserPrinciple(user);
-        log.info(String.format(RETURNING_FOUND_USER_BY_USERNAME, username));
-        return userPrinciple;
+        if (user == null) {
+            log.error(NO_USER_FOUNT_BY_USERNAME + username);
+            try {
+                throw new UsernameNotFoundException(NO_USER_FOUNT_BY_USERNAME + username);
+            } catch (UsernameNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        }else {
+            validateNewUser(user);
+            user.setLastLoginDateDisplay(user.getLastLoginDate());
+            user.setLastLoginDate(new Date());
+            userRepository.save(user);
+            UserPrinciple userPrinciple = new UserPrinciple(user);
+            log.info(String.format(RETURNING_FOUND_USER_BY_USERNAME, username));
+            return userPrinciple;
+        }
+    }
+
+    private void validateNewUser(Users user) {
+        if (user.isNotLocked()) {
+            if (loginAttemptService.hasExceededMaxAttempts(user.getUsername())) {
+                user.setNotLocked(false);
+            }else {
+                user.setNotLocked(true);
+            }
+        }else {
+            loginAttemptService.evictUserFromLoginAttemptCache(user.getUsername());
+        }
     }
 
     @Override
